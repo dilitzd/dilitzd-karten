@@ -42,4 +42,4 @@ Web-App „Karten“ von Matthias Dilitz: Kunden- und Mitgliedskarten (EAN-13, C
 4. Commit und Push **direkt auf `main`** (GitHub Pages veröffentlicht von dort). `main` muss immer lauffähig sein. Nie `--force`; bei abgelehntem Push erst `git pull --rebase origin main`.
 
 ## Veröffentlichung
-GitHub Pages: Settings → Pages → `main`, `/ (root)`; Adresse `https://dilitzd.github.io/dilitzd-karten/`. Repository ist privat – Pages dafür nur mit bezahltem GitHub-Abo, sonst öffentlich stellen (Matthias entscheidet). Einschalten kann nur Matthias.
+Läuft seit 17.11.2026 über GitHub Pages (`main`, `/ (root)`): https://dilitzd.github.io/dilitzd-karten/ – Repository dafür öffentlich (nur Code, keine Karten). Jeder Push auf `main` ist nach 1–2 Minuten live; am iPhone holt die App die neue Fassung beim nächsten Start mit Netz.
