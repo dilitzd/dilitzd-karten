@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karten</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Karten">
+<meta name="theme-color" content="#1C1C1C">
+<meta name="color-scheme" content="dark">
+<link rel="apple-touch-icon" href="symbol-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<!--
+  Karten – Kunden- und Mitgliedskarten als Web-App (Home-Bildschirm, ohne Netz nutzbar).
+  Feste Gestaltung (kein Hell/Dunkel): Seite im Grauverlauf, jede Karte in der Farbe ihres Geschäfts/Vereins,
+  Code immer dunkel auf weißem Feld (Kassenscanner).
+  „+“ oben rechts: neue Karte mit Name, Farbe, Art (EAN-13, Code 128, QR-Code, nur Nummer), Code und Vorschau.
+  Die Karten liegen NUR im Speicher dieses Geräts (localStorage) – nie im Code, nie auf dem Server.
+  Codes werden lokal erzeugt: codes.js.
+-->
+<style>
+  :root {
+    --hg-oben: #3C3C3C; --hg-unten: #1C1C1C; --text: #FFFFFF; --text2: #D0D0D0; --grau: #8E8E8E;
+    --sand: #C8AA80; --rot: #F28B82; --rand: #FFFFFF1A; --eingabe: #2A2A2A;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: var(--text);
+    background: linear-gradient(var(--hg-oben), var(--hg-unten)) fixed; background-color: var(--hg-unten);
+    padding: calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 24px); }
+  header { display: flex; align-items: center; gap: 6px; margin: 0 auto 16px; max-width: 980px; }
+  .rubrik { font-size: 12px; font-weight: 600; letter-spacing: .18em; color: var(--grau); text-transform: uppercase; margin-right: auto; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  .knopf { font-size: 22px; line-height: 1; padding: 6px 8px; color: var(--grau); }
+  .plus { width: 36px; height: 36px; border-radius: 18px; background: var(--sand); color: #1C1C1C; font-size: 24px; font-weight: 500; line-height: 36px; text-align: center; }
+  .liste { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); max-width: 980px; margin: 0 auto; }
+
+  /* Karte: Farbe des Geschäfts, oben Name, unten weißes Feld mit dem Code */
+  .kachel { aspect-ratio: 1.75 / 1; border-radius: 18px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 10px;
+    width: 100%; text-align: left; color: var(--kt); background: linear-gradient(160deg, color-mix(in srgb, var(--kf) 82%, #FFFFFF), var(--kf) 55%, color-mix(in srgb, var(--kf) 80%, #000000)); }
+  .kachel .kopf { display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+  .kachel .titel { font-size: 14px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; overflow-wrap: anywhere; }
+  .kachel .text { font-size: 12px; opacity: .8; }
+  .feld { margin-top: auto; background: #FFFFFF; color: #111111; border-radius: 12px; padding: 10px 12px 8px; display: flex; flex-direction: column; align-items: center; }
+  .feld svg.strich { width: 100%; height: 54px; display: block; }
+  .feld .qrzeile { display: flex; align-items: center; gap: 12px; width: 100%; }
+  .feld svg.qr { width: 84px; height: 84px; flex: none; display: block; }
+  .nr { font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: #3C3C3C; margin-top: 4px; text-align: center; overflow-wrap: anywhere; }
+  .feld .qrzeile .nr { font-size: 14px; text-align: left; margin: 0; }
+  .nr.gross { font-size: 24px; color: #111111; letter-spacing: .04em; margin: 6px 0; }
+  .fehler { color: var(--rot); font-size: 13px; min-height: 1em; margin-top: 6px; }
+  .feld .fehler { color: #C0392B; margin: 0; }
+
+  .leer { grid-column: 1 / -1; text-align: center; color: var(--text2); font-size: 15px; line-height: 1.5; margin-top: 16vh; }
+  .leer .linie { width: 110px; height: 1px; background: var(--sand); margin: 16px auto; }
+  .leer button { display: inline-block; margin: 6px; padding: 12px 18px; border-radius: 12px; }
+  .haupt { background: var(--sand); color: #1C1C1C; font-weight: 600; }
+  .zweit { background: #FFFFFF14; color: var(--text); }
+
+  /* große Ansicht: Code dunkel auf Weiß, oben Band in der Kartenfarbe */
+  #gross { position: fixed; inset: 0; background: #FFFFFF; color: #111111; display: none; flex-direction: column; align-items: center; touch-action: pan-y; z-index: 5; }
+  #gross.offen { display: flex; }
+  #gross .band { width: 100%; padding: calc(env(safe-area-inset-top) + 8px) 12px 18px; background: var(--kf); color: var(--kt); }
+  #gross .band .knoepfe { display: flex; justify-content: space-between; }
+  #gross .band .knoepfe button { font-size: 16px; padding: 8px; opacity: .85; }
+  #gross .band .titel { text-align: center; font-size: 17px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; margin-top: 4px; }
+  #gross .band .text { text-align: center; font-size: 13px; opacity: .8; margin-top: 4px; }
+  #grossInhalt { flex: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+  #grossInhalt svg.strich { width: 100%; max-width: 640px; height: 28vh; max-height: 220px; display: block; }
+  #grossInhalt svg.qr { width: min(78vw, 52vh, 420px); height: min(78vw, 52vh, 420px); display: block; }
+  #grossInhalt .nr { font-size: 18px; margin-top: 10px; }
+  #grossInhalt .nr.gross { font-size: 34px; }
+  #gross .unten { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-bottom: calc(env(safe-area-inset-bottom) + 14px); }
+  #gross .pfeile { display: flex; gap: 40px; }
+  #gross .pfeile button { font-size: 28px; color: #8E8E8E; padding: 4px 14px; }
+  #gross .punkte { display: flex; gap: 6px; }
+  #gross .punkte i { width: 6px; height: 6px; border-radius: 3px; background: #D0D0D0; } #gross .punkte i.an { background: #8E8E8E; }
+
+  /* Dialoge */
+  dialog { border: 0; border-radius: 18px; padding: 20px; width: min(94vw, 460px); max-height: 92vh; overflow: auto; color: var(--text);
+    background: linear-gradient(var(--hg-oben), var(--hg-unten)); box-shadow: 0 10px 40px #0008; }
+  dialog::backdrop { background: #000A; }
+  dialog h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--grau); }
+  label, .lbl { display: block; font-size: 12px; color: var(--grau); margin: 12px 0 5px; }
+  input, textarea { width: 100%; font: 16px -apple-system, system-ui, sans-serif; color: var(--text); background: var(--eingabe);
+    border: 1px solid var(--rand); border-radius: 10px; padding: 10px; }
+  input.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  textarea { height: 150px; font: 13px ui-monospace, Menlo, monospace; }
+  .arten { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .arten button { padding: 10px 6px; border-radius: 10px; background: var(--eingabe); border: 1px solid var(--rand); font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .arten button small { color: var(--grau); font-size: 11px; }
+  .arten button.an { border-color: var(--sand); color: var(--sand); }
+  .arten svg { width: 22px; height: 16px; fill: currentColor; }
+  .farben { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .farben button { width: 32px; height: 32px; border-radius: 16px; box-shadow: 0 0 0 1px #FFFFFF33 inset; }
+  .farben button.an { outline: 2px solid var(--sand); outline-offset: 2px; }
+  .farben label { margin: 0; position: relative; width: 32px; height: 32px; border-radius: 16px; overflow: hidden; color: var(--text);
+    background: conic-gradient(#F28B82, #F6C800, #A8E6A1, #78D2F0, #6A3D9A, #F28B82); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .farben label.an { outline: 2px solid var(--sand); outline-offset: 2px; }
+  .farben input[type=color] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; padding: 0; border: 0; }
+  .vorschau { margin-top: 16px; }
+  .vorschau .kachel { pointer-events: none; }
+  .zeile { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+  .zeile button { padding: 10px 14px; border-radius: 10px; font-size: 15px; }
+  .gefahr { color: var(--rot); margin-right: auto; }
+  .menue button { display: block; width: 100%; text-align: left; padding: 12px 4px; font-size: 16px; border-bottom: 1px solid var(--rand); }
+  .hinweis { font-size: 12px; color: var(--grau); line-height: 1.45; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header><span class="rubrik">Karten</span>
+  <button class="plus" id="plusKnopf" aria-label="Neue Karte">+</button>
+  <button class="knopf" id="menueKnopf" aria-label="Menü">⋯</button></header>
+<main class="liste" id="liste"></main>
+
+<section id="gross" aria-modal="true">
+  <div class="band" id="band"><div class="knoepfe"><button id="grossZu">Schließen</button><button id="grossAendern">Ändern</button></div>
+    <div class="titel" id="grossTitel"></div><div class="text" id="grossText"></div></div>
+  <div id="grossInhalt"></div>
+  <div class="unten"><div class="punkte" id="punkte"></div>
+    <div class="pfeile"><button id="zurueck" aria-label="vorherige Karte">‹</button><button id="weiter" aria-label="nächste Karte">›</button></div></div>
+</section>
+
+<dialog id="menue"><h2>Karten</h2><div class="menue">
+  <button data-a="neu">+ Neue Karte</button>
+  <button data-a="einfuegen">Liste einfügen</button>
+  <button data-a="kopieren">Liste kopieren (Sicherung)</button>
+  <button data-a="zu">Schließen</button></div>
+  <p class="hinweis">Die Karten liegen nur auf diesem Gerät. Nach Änderungen ab und zu „Liste kopieren“ und z. B. in Notizen sichern.</p>
+</dialog>
+
+<dialog id="form"><h2 id="formTitel">Neue Karte</h2>
+  <label for="fName">Name</label><input id="fName" autocomplete="off" placeholder="z. B. Supermarkt">
+  <span class="lbl">Farbe</span><div class="farben" id="farben"></div>
+  <span class="lbl">Art</span>
+  <div class="arten" id="arten">
+    <button data-art="ean13"><svg viewBox="0 0 22 16"><path d="M0 0h2v16H0zM3 0h1v16H3zM6 0h2v16H6zM10 0h1v16h-1zM13 0h3v16h-3zM17 0h1v16h-1zM20 0h2v16h-2z"/></svg>EAN-13 <small>Ziffern</small></button>
+    <button data-art="code128"><svg viewBox="0 0 22 16"><path d="M0 0h1v16H0zM2 0h2v16H2zM6 0h1v16H6zM8 0h3v16H8zM12 0h1v16h-1zM15 0h2v16h-2zM19 0h1v16h-1zM21 0h1v16h-1z"/></svg>Code 128 <small>Text</small></button>
+    <button data-art="qr"><svg viewBox="0 0 22 16"><path d="M3 0h6v6H3zM4 1v4h4V1zM13 0h6v6h-6zM14 1v4h4V1zM3 10h6v6H3zM4 11v4h4v-4zM11 8h2v2h-2zM14 10h2v2h-2zM17 12h2v4h-2zM11 13h3v3h-3z"/></svg>QR-Code</button>
+    <button data-art="nummer"><svg viewBox="0 0 22 16"><text x="11" y="13" font-size="13" font-weight="700" text-anchor="middle" font-family="system-ui">123</text></svg>Nur Nummer</button>
+  </div>
+  <label for="fCode" id="fCodeLabel">Code</label><input id="fCode" class="mono" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <label for="fNummer">Angezeigte Nummer (leer = wie Code)</label><input id="fNummer" class="mono" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <label for="fText">Beschreibung (optional)</label><input id="fText" autocomplete="off" placeholder="z. B. Mitglied">
+  <div class="vorschau" id="vorschau"></div>
+  <div class="fehler" id="fFehler"></div>
+  <div class="zeile"><button class="gefahr" id="fLoeschen">Löschen</button><button id="fHoch">Nach vorne</button><button id="fAbbrechen">Abbrechen</button><button class="haupt" id="fSpeichern">Speichern</button></div>
+</dialog>
+
+<dialog id="import"><h2>Liste einfügen</h2>
+  <textarea id="iText" placeholder='[{"name":"Supermarkt","format":"ean13","code":"…","farbe":"#D7262E"}]'></textarea>
+  <div class="fehler" id="iFehler"></div>
+  <p class="hinweis">Felder: name, format (ean13 / code128 / qr / nummer), code, nummer, beschreibung, farbe (#RRGGBB). Die bisherige Liste wird ersetzt.</p>
+  <div class="zeile"><button id="iEinfuegen">Aus Zwischenablage</button><button id="iAbbrechen">Abbrechen</button><button class="haupt" id="iUebernehmen">Übernehmen</button></div>
+</dialog>
+
+<script src="codes.js"></script>
+<script>
+"use strict";
+const SPEICHER = "karten-v1";
+const STANDARD = "#4A4A4A";
+// Auswahl im Formular; jede andere Farbe über das Farbrad
+const FARBEN = ["#4A4A4A", "#1C1C1C", "#D7262E", "#E85D04", "#F6C800", "#1F7A3D", "#A8E6A1", "#1F4E9C", "#78D2F0", "#6A3D9A", "#C8AA80", "#F2F2F2"];
+const ARTEN = ["ean13", "code128", "qr", "nummer"];
+const $ = id => document.getElementById(id);
+const istFarbe = f => typeof f === "string" && /^#[0-9a-f]{6}$/i.test(f);
+let karten = [];
+try { const k = JSON.parse(localStorage.getItem(SPEICHER) || "[]"); if (Array.isArray(k)) karten = k.filter(gueltig); } catch (e) {}
+function gueltig(k) { return k && typeof k.name === "string" && k.name && typeof k.code === "string" && k.code && ARTEN.includes(k.format); }
+const speichern = () => { try { localStorage.setItem(SPEICHER, JSON.stringify(karten)); } catch (e) { alert("Speichern nicht möglich: " + e.message); } };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function pruefen(k) { if (k.format === "ean13") return ean13(k.code); if (k.format === "code128") return code128(k.code); if (k.format === "qr") return qr(k.code); return null; }
+
+// Schrift auf der Karte: dunkel auf hellen Farben, weiß auf dunklen
+function textFarbe(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#1C1C1C" : "#FFFFFF";
+}
+const farbStil = k => { const f = istFarbe(k.farbe) ? k.farbe : STANDARD; return `--kf:${f};--kt:${textFarbe(f)}`; };
+
+// Codes als SVG (scharfe Kanten), immer #111 auf Weiß
+function strichSvg(c) {
+  const alle = c.ruhe[0] + c.module.length + c.ruhe[1]; let r = "";
+  c.module.forEach((b, i) => { if (b) r += `<rect x="${c.ruhe[0] + i}" y="0" width="1" height="40"/>`; });
+  return `<svg class="strich" viewBox="0 0 ${alle} 40" preserveAspectRatio="none" shape-rendering="crispEdges" fill="#111111">${r}</svg>`;
+}
+function qrSvg(q) {
+  const n = q.matrix.length, rand = 2; let r = "";
+  q.matrix.forEach((z, y) => z.forEach((d, x) => { if (d) r += `<rect x="${x + rand}" y="${y + rand}" width="1" height="1"/>`; }));
+  return `<svg class="qr" viewBox="0 0 ${n + 2 * rand} ${n + 2 * rand}" shape-rendering="crispEdges" fill="#111111">${r}</svg>`;
+}
+// Code-Teil einer Karte; gross = große Ansicht
+function codeTeil(k, gross) {
+  let c = null, fehler = "";
+  try { c = pruefen(k); } catch (e) { fehler = e.message; }
+  const nummer = k.nummer || (c && c.text && k.format !== "qr" ? c.text : k.code);
+  if (!k.code) return `<div class="nr">Code eingeben</div>`;
+  if (fehler) return `<div class="nr gross">${esc(nummer)}</div><div class="fehler">${esc(fehler)}</div>`;
+  if (k.format === "nummer") return `<div class="nr gross">${esc(nummer)}</div>`;
+  if (k.format === "qr" && !gross) return `<div class="qrzeile">${qrSvg(c)}<div class="nr">${esc(nummer)}</div></div>`;
+  if (k.format === "qr") return `${qrSvg(c)}<div class="nr">${esc(nummer)}</div>`;
+  return `${strichSvg(c)}<div class="nr">${esc(nummer)}</div>`;
+}
+function kachel(k, i) {
+  return `<button class="kachel" ${i >= 0 ? `data-i="${i}"` : ""} style="${farbStil(k)}" aria-label="${esc(k.name || "Karte")} groß anzeigen">
+    <div class="kopf"><div class="titel">${esc(k.name || "Name")}</div>${k.beschreibung ? `<div class="text">${esc(k.beschreibung)}</div>` : ""}</div>
+    <div class="feld">${codeTeil(k, false)}</div></button>`;
+}
+
+function zeichneListe() {
+  const l = $("liste");
+  if (!karten.length) {
+    l.innerHTML = `<div class="leer">Noch keine Karten auf diesem Gerät.<div class="linie"></div>
+      <button class="haupt" onclick="oeffneForm(-1)">+ Neue Karte</button><button class="zweit" onclick="oeffneImport()">Liste einfügen</button></div>`;
+    return;
+  }
+  l.innerHTML = karten.map(kachel).join("");
+  l.querySelectorAll(".kachel").forEach(b => b.onclick = () => zeigeGross(+b.dataset.i));
+}
+
+// große Ansicht mit Wischen, Bildschirm bleibt an (falls das Gerät es erlaubt)
+let aktuell = 0, sperre = null;
+async function wachHalten(an) {
+  try { if (an && "wakeLock" in navigator) sperre = await navigator.wakeLock.request("screen"); else if (sperre) { await sperre.release(); sperre = null; } } catch (e) {}
+}
+function zeigeGross(i) {
+  aktuell = (i + karten.length) % karten.length; const k = karten[aktuell];
+  $("band").setAttribute("style", farbStil(k));
+  $("grossTitel").textContent = k.name; $("grossText").textContent = k.beschreibung || "";
+  $("grossInhalt").innerHTML = codeTeil(k, true);
+  $("punkte").innerHTML = karten.length > 1 ? karten.map((_, j) => `<i class="${j === aktuell ? "an" : ""}"></i>`).join("") : "";
+  $("zurueck").style.visibility = $("weiter").style.visibility = karten.length > 1 ? "visible" : "hidden";
+  document.querySelector('meta[name="theme-color"]').content = istFarbe(k.farbe) ? k.farbe : STANDARD;
+  if (!$("gross").classList.contains("offen")) { $("gross").classList.add("offen"); wachHalten(true); history.pushState({ gross: 1 }, ""); }
+}
+function schliesseGross() { $("gross").classList.remove("offen"); wachHalten(false); document.querySelector('meta[name="theme-color"]').content = "#1C1C1C"; }
+$("grossZu").onclick = () => history.state && history.state.gross ? history.back() : schliesseGross();
+window.addEventListener("popstate", schliesseGross);
+$("zurueck").onclick = () => zeigeGross(aktuell - 1);
+$("weiter").onclick = () => zeigeGross(aktuell + 1);
+$("grossAendern").onclick = () => { $("grossZu").onclick(); oeffneForm(aktuell); };
+let startX = null;
+$("gross").addEventListener("touchstart", e => { startX = e.touches[0].clientX; }, { passive: true });
+$("gross").addEventListener("touchend", e => { if (startX === null) return; const d = e.changedTouches[0].clientX - startX; startX = null;
+  if (Math.abs(d) > 50 && karten.length > 1) zeigeGross(aktuell + (d < 0 ? 1 : -1)); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && $("gross").classList.contains("offen")) wachHalten(true); });
+
+// Menü
+$("plusKnopf").onclick = () => oeffneForm(-1);
+$("menueKnopf").onclick = () => $("menue").showModal();
+$("menue").querySelectorAll("button[data-a]").forEach(b => b.onclick = async () => {
+  $("menue").close();
+  if (b.dataset.a === "neu") oeffneForm(-1);
+  if (b.dataset.a === "einfuegen") oeffneImport();
+  if (b.dataset.a === "kopieren") {
+    const t = JSON.stringify(karten);
+    try { await navigator.clipboard.writeText(t); alert(karten.length + " Karten kopiert. In Notizen einfügen und aufbewahren."); }
+    catch (e) { prompt("Kopieren nicht möglich – Text hier markieren und kopieren:", t); }
+  }
+});
+
+// Karte anlegen / ändern – mit Vorschau
+let bearbeitet = -1, art = "ean13", farbe = STANDARD, artGewaehlt = false;
+function formKarte() { return { name: $("fName").value.trim(), format: art, code: $("fCode").value.trim(), nummer: $("fNummer").value.trim(), beschreibung: $("fText").value.trim(), farbe }; }
+function zeichneFarben() {
+  const eigene = !FARBEN.includes(farbe.toUpperCase());
+  $("farben").innerHTML = FARBEN.map(f => `<button data-f="${f}" style="background:${f}" class="${f === farbe.toUpperCase() ? "an" : ""}" aria-label="Farbe ${f}"></button>`).join("")
+    + `<label class="${eigene ? "an" : ""}" ${eigene ? `style="background:${farbe}"` : ""} aria-label="eigene Farbe">${eigene ? "" : "+"}<input type="color" id="fFarbe" value="${farbe}"></label>`;
+  $("farben").querySelectorAll("button").forEach(b => b.onclick = () => { farbe = b.dataset.f; zeichneFarben(); vorschau(); });
+  $("fFarbe").oninput = e => { farbe = e.target.value.toUpperCase(); vorschau(); };
+  $("fFarbe").onchange = () => zeichneFarben();
+}
+function setzeArt(a) {
+  art = a; $("arten").querySelectorAll("button").forEach(b => b.classList.toggle("an", b.dataset.art === a));
+  $("fCodeLabel").textContent = { ean13: "Code (12 oder 13 Ziffern unter dem Strichcode)", code128: "Code (Buchstaben/Ziffern unter dem Strichcode)", qr: "Inhalt des QR-Codes", nummer: "Nummer" }[a];
+  $("fCode").inputMode = a === "ean13" ? "numeric" : "text";
+}
+// Art beim Tippen vorschlagen, solange sie nicht selbst gewählt wurde
+function artVorschlag(t) {
+  if (/^\d{12,13}$/.test(t.replace(/\s/g, ""))) return "ean13";
+  if (/^https?:|[^\x20-\x7E]/i.test(t) || t.length > 40) return "qr";
+  return "code128";
+}
+function vorschau() { $("vorschau").innerHTML = kachel(formKarte(), -1); $("fFehler").textContent = ""; }
+function oeffneForm(i) {
+  bearbeitet = i; const k = i >= 0 ? karten[i] : { name: "", format: "ean13", code: "", nummer: "", beschreibung: "" };
+  $("formTitel").textContent = i >= 0 ? "Karte ändern" : "Neue Karte";
+  $("fName").value = k.name; $("fCode").value = k.code; $("fNummer").value = k.nummer || ""; $("fText").value = k.beschreibung || "";
+  farbe = (istFarbe(k.farbe) ? k.farbe : STANDARD).toUpperCase(); artGewaehlt = i >= 0;
+  setzeArt(k.format); zeichneFarben();
+  $("fLoeschen").style.display = i >= 0 ? "" : "none"; $("fHoch").style.display = i > 0 ? "" : "none";
+  vorschau(); $("form").showModal();
+  if (i < 0) $("fName").focus();
+}
+$("arten").querySelectorAll("button").forEach(b => b.onclick = () => { artGewaehlt = true; setzeArt(b.dataset.art); vorschau(); });
+$("fCode").oninput = () => { const t = $("fCode").value.trim(); if (!artGewaehlt && t) setzeArt(artVorschlag(t)); vorschau(); };
+["fName", "fNummer", "fText"].forEach(id => $(id).oninput = vorschau);
+$("fAbbrechen").onclick = () => $("form").close();
+$("fSpeichern").onclick = () => {
+  const k = formKarte();
+  if (!k.name || !k.code) return $("fFehler").textContent = "Name und Code fehlen.";
+  if (karten.some((x, j) => j !== bearbeitet && x.name.toLowerCase() === k.name.toLowerCase())) return $("fFehler").textContent = "Name schon vergeben.";
+  try { pruefen(k); } catch (e) { return $("fFehler").textContent = e.message; }
+  if (bearbeitet >= 0) karten[bearbeitet] = k; else karten.push(k);
+  speichern(); $("form").close(); zeichneListe();
+};
+$("fLoeschen").onclick = () => { if (!confirm("„" + karten[bearbeitet].name + "“ löschen?")) return; karten.splice(bearbeitet, 1); speichern(); $("form").close(); zeichneListe(); };
+$("fHoch").onclick = () => { karten.splice(bearbeitet - 1, 0, karten.splice(bearbeitet, 1)[0]); speichern(); $("form").close(); zeichneListe(); };
+
+// Liste einfügen (JSON, z. B. aus dem Chat oder der Sicherung)
+function oeffneImport() { $("iText").value = ""; $("iFehler").textContent = ""; $("import").showModal(); }
+$("iAbbrechen").onclick = () => $("import").close();
+$("iEinfuegen").onclick = async () => { try { $("iText").value = await navigator.clipboard.readText(); } catch (e) { $("iFehler").textContent = "Zwischenablage gesperrt – bitte ins Feld einfügen (lange tippen → Einsetzen)."; } };
+$("iUebernehmen").onclick = () => {
+  let liste; try { liste = JSON.parse($("iText").value); } catch (e) { return $("iFehler").textContent = "Keine gültige Liste (JSON)."; }
+  if (!Array.isArray(liste)) return $("iFehler").textContent = "Erwartet wird eine Liste [ {…}, {…} ].";
+  const gut = [], fehler = [];
+  for (const x of liste) {
+    const k = x && typeof x === "object" ? { name: String(x.name || "").trim(), format: x.format, code: String(x.code || "").trim(), nummer: String(x.nummer || "").trim(),
+      beschreibung: String(x.beschreibung || "").trim(), farbe: istFarbe(x.farbe) ? x.farbe.toUpperCase() : STANDARD } : null;
+    try { if (!k || !gueltig(k)) throw new Error("Name, Art oder Code fehlt"); pruefen(k);
+      if (gut.some(g => g.name.toLowerCase() === k.name.toLowerCase())) throw new Error("Name doppelt"); gut.push(k); }
+    catch (e) { fehler.push(((k && k.name) || "?") + ": " + e.message); }
+  }
+  if (!gut.length) return $("iFehler").textContent = fehler.join(" · ") || "Die Liste ist leer.";
+  if (!confirm(gut.length + " Karten übernehmen? Die bisherige Liste wird ersetzt." + (fehler.length ? "\n\nÜbersprungen:\n" + fehler.join("\n") : ""))) return;
+  karten = gut; speichern(); $("import").close(); zeichneListe();
+};
+
+zeichneListe();
+// Ohne Netz nutzbar: Seite und Codes im Gerät zwischenspeichern
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
