@@ -1,5 +1,8 @@
 # Changelog
 
+## v2.1.1 – 17.11.2026
+- **App-Symbol neu:** Schriftzug KARTEN in gesperrten Versalien (weiß) mit Querstrich in Sand auf Grauverlauf – wie die Profilbilder, ohne Strichcode. Generator `werkzeuge/symbol.py`.
+
 ## v2.1.0 – 17.11.2026
 - **Neu: Karte aus Foto.** Knopf „Aus Foto lesen“ im Formular und Menüpunkt „+ Karte aus Foto“: Foto aufnehmen oder wählen → Code und Art automatisch (EAN-13, UPC-A → EAN-13, Code 128, QR; andere als Nummer mit Hinweis), Farbe aus der Bildmitte vorgeschlagen (häufigster kräftiger Farbton, sonst Schwarz/Grau). Name trägt man selbst ein.
 - Lese-Bibliothek zxing-wasm 3.1.6 (MIT) lokal in `lib/` (ca. 1 MB), lädt erst beim ersten Foto, im Offline-Speicher enthalten (`sw.js` karten-3). Kein Online-Dienst, Foto wird nicht gespeichert.

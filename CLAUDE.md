@@ -27,7 +27,7 @@ Web-App „Karten“ von Matthias Dilitz: Kunden- und Mitgliedskarten (EAN-13, C
 | `codes.js` | Code-Erzeuger EAN-13, Code 128, QR |
 | `lib/` | zxing-wasm (Lesen aus Fotos), unverändert aus npm – siehe `lib/LIESMICH.txt` |
 | `sw.js` | Offline-Speicher – **bei jeder Änderung `VERSION` erhöhen** |
-| `manifest.webmanifest`, `symbol-*.png` | Name und Symbol für den Home-Bildschirm |
+| `manifest.webmanifest`, `symbol-*.png` | Name und Symbol für den Home-Bildschirm – Symbol: KARTEN + Querstrich Sand, erzeugt `werkzeuge/symbol.py` |
 | `tests/` | `browser.js` (Playwright, iPhone 14), `codes.js` + `codes.py` (zxing liest Codes zurück) |
 
 ## Prüfen vor Auslieferung

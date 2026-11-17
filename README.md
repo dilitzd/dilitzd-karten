@@ -17,7 +17,7 @@ Kunden- und Mitgliedskarten als Web-App für den Home-Bildschirm (iPhone, ohne N
 | `codes.js` | Code-Erzeuger EAN-13, Code 128, QR |
 | `lib/` | zxing-wasm 3.1.6 (MIT) zum Lesen von Codes aus Fotos – lädt erst beim ersten Foto (siehe `lib/LIESMICH.txt`) |
 | `sw.js` | Offline-Speicher – bei jeder neuen Fassung `VERSION` erhöhen |
-| `manifest.webmanifest`, `symbol-*.png` | Name und Symbol für den Home-Bildschirm |
+| `manifest.webmanifest`, `symbol-*.png` | Name und Symbol für den Home-Bildschirm (Symbol erzeugt `werkzeuge/symbol.py`) |
 | `tests/` | `browser.js` (Playwright, iPhone 14), `codes.js` + `codes.py` (zxing liest die Codes zurück), `fotos.py` + `foto.js` (Foto-Lesen) |
 
 ## Veröffentlichen (GitHub Pages)
