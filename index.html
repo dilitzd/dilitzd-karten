@@ -17,6 +17,7 @@
   Feste Gestaltung (kein Hell/Dunkel): Seite im Grauverlauf, jede Karte in der Farbe ihres Geschäfts/Vereins,
   Code immer dunkel auf weißem Feld (Kassenscanner).
   „+“ oben rechts: neue Karte mit Name, Farbe, Art (EAN-13, Code 128, QR-Code, nur Nummer), Code und Vorschau.
+  „Aus Foto lesen“: Code, Art und Farbe aus einem Foto der Karte (zxing-wasm in lib/, läuft im Gerät, lädt erst bei Bedarf).
   Die Karten liegen NUR im Speicher dieses Geräts (localStorage) – nie im Code, nie auf dem Server.
   Codes werden lokal erzeugt: codes.js.
 -->
@@ -106,6 +107,10 @@
   .zeile button { padding: 10px 14px; border-radius: 10px; font-size: 15px; }
   .gefahr { color: var(--rot); margin-right: auto; }
   .menue button { display: block; width: 100%; text-align: left; padding: 12px 4px; font-size: 16px; border-bottom: 1px solid var(--rand); }
+  .foto { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; border-radius: 12px; background: #FFFFFF14; font-size: 15px; font-weight: 600; color: var(--sand); }
+  .foto svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; flex: none; }
+  #fotoStatus { font-size: 12px; color: var(--grau); min-height: 1em; margin-top: 6px; line-height: 1.4; }
+  #fotoStatus.fehler { color: var(--rot); }
   .hinweis { font-size: 12px; color: var(--grau); line-height: 1.45; margin-top: 10px; }
 </style>
 </head>
@@ -125,6 +130,7 @@
 
 <dialog id="menue"><h2>Karten</h2><div class="menue">
   <button data-a="neu">+ Neue Karte</button>
+  <button data-a="foto">+ Karte aus Foto</button>
   <button data-a="einfuegen">Liste einfügen</button>
   <button data-a="kopieren">Liste kopieren (Sicherung)</button>
   <button data-a="zu">Schließen</button></div>
@@ -132,6 +138,9 @@
 </dialog>
 
 <dialog id="form"><h2 id="formTitel">Neue Karte</h2>
+  <button class="foto" id="fotoKnopf"><svg viewBox="0 0 24 24"><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.6l1.4-2h7l1.4 2h2.6A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.6"/></svg>Aus Foto lesen</button>
+  <input type="file" id="fotoDatei" accept="image/*" hidden>
+  <div id="fotoStatus"></div>
   <label for="fName">Name</label><input id="fName" autocomplete="off" placeholder="z. B. Supermarkt">
   <span class="lbl">Farbe</span><div class="farben" id="farben"></div>
   <span class="lbl">Art</span>
@@ -253,6 +262,7 @@ $("menueKnopf").onclick = () => $("menue").showModal();
 $("menue").querySelectorAll("button[data-a]").forEach(b => b.onclick = async () => {
   $("menue").close();
   if (b.dataset.a === "neu") oeffneForm(-1);
+  if (b.dataset.a === "foto") { oeffneForm(-1); $("fotoDatei").click(); }
   if (b.dataset.a === "einfuegen") oeffneImport();
   if (b.dataset.a === "kopieren") {
     const t = JSON.stringify(karten);
@@ -291,8 +301,8 @@ function oeffneForm(i) {
   farbe = (istFarbe(k.farbe) ? k.farbe : STANDARD).toUpperCase(); artGewaehlt = i >= 0;
   setzeArt(k.format); zeichneFarben();
   $("fLoeschen").style.display = i >= 0 ? "" : "none"; $("fHoch").style.display = i > 0 ? "" : "none";
+  $("fotoKnopf").style.display = i >= 0 ? "none" : ""; fotoMeldung("");
   vorschau(); $("form").showModal();
-  if (i < 0) $("fName").focus();
 }
 $("arten").querySelectorAll("button").forEach(b => b.onclick = () => { artGewaehlt = true; setzeArt(b.dataset.art); vorschau(); });
 $("fCode").oninput = () => { const t = $("fCode").value.trim(); if (!artGewaehlt && t) setzeArt(artVorschlag(t)); vorschau(); };
@@ -327,6 +337,71 @@ $("iUebernehmen").onclick = () => {
   if (!gut.length) return $("iFehler").textContent = fehler.join(" · ") || "Die Liste ist leer.";
   if (!confirm(gut.length + " Karten übernehmen? Die bisherige Liste wird ersetzt." + (fehler.length ? "\n\nÜbersprungen:\n" + fehler.join("\n") : ""))) return;
   karten = gut; speichern(); $("import").close(); zeichneListe();
+};
+
+// ------------------------------------------------------------ Aus Foto lesen ----
+// zxing-wasm (lib/) wird erst beim ersten Foto geladen; alles läuft im Gerät, das Foto wird nicht gespeichert.
+let leser = null;
+function ladeLeser() {
+  if (!leser) leser = new Promise((ok, nein) => {
+    const s = document.createElement("script"); s.src = "lib/zxing-reader.js";
+    s.onerror = () => nein(new Error("Leser konnte nicht geladen werden (einmal mit Netz öffnen)."));
+    s.onload = () => ZXingWASM.prepareZXingModule({ fireImmediately: true, overrides: {
+      locateFile: (pfad, vor) => pfad.endsWith(".wasm") ? new URL("lib/zxing_reader.wasm", location.href).href : vor + pfad } }).then(ok, nein);
+    document.head.appendChild(s);
+  }).catch(e => { leser = null; throw e; });
+  return leser;
+}
+function fotoMeldung(t, fehler) { $("fotoStatus").textContent = t; $("fotoStatus").className = fehler ? "fehler" : ""; }
+// Foto → Bildpunkte (über das Bild-Element, damit auch HEIC vom iPhone geht), lange Seite höchstens 2400 px
+async function bildpunkte(datei, max) {
+  const url = URL.createObjectURL(datei);
+  try {
+    const img = new Image(); img.src = url; await img.decode();
+    const f = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * f); c.height = Math.round(img.naturalHeight * f);
+    const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(img, 0, 0, c.width, c.height);
+    return g.getImageData(0, 0, c.width, c.height);
+  } finally { URL.revokeObjectURL(url); }
+}
+// Farbvorschlag: häufigster kräftiger Farbton in der Bildmitte; sonst Schwarz (dunkle Karte) oder Grau
+function farbVorschlag(bild) {
+  const { width: w, height: h, data: d } = bild, schritt = Math.max(1, Math.round(Math.max(w, h) / 120));
+  const faecher = Array.from({ length: 24 }, () => ({ n: 0, r: 0, g: 0, b: 0 })); let alle = 0, hell = 0;
+  for (let y = Math.round(h * .15); y < h * .85; y += schritt) for (let x = Math.round(w * .15); x < w * .85; x += schritt) {
+    const i = (y * w + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2], ma = Math.max(r, g, b), mi = Math.min(r, g, b);
+    alle++; hell += ma;
+    if (ma < 50 || (ma - mi) / ma < .3) continue;
+    let ton = ma === r ? (g - b) / (ma - mi) : ma === g ? 2 + (b - r) / (ma - mi) : 4 + (r - g) / (ma - mi);
+    const f = faecher[Math.floor(((ton * 60 + 360) % 360) / 15)]; f.n++; f.r += r; f.g += g; f.b += b;
+  }
+  const best = faecher.reduce((a, b) => b.n > a.n ? b : a);
+  if (best.n > alle * .08) return "#" + [best.r, best.g, best.b].map(v => Math.round(v / best.n).toString(16).padStart(2, "0")).join("").toUpperCase();
+  return hell / alle < 70 ? "#1C1C1C" : STANDARD;
+}
+// zxing-Ergebnis → Art und Code der App
+function uebernehmen(e) {
+  const t = e.text.trim();
+  if (e.format === "EAN13") return { art: "ean13", code: t };
+  if (e.format === "UPCA") return { art: "ean13", code: "0" + t };              // UPC-A = EAN-13 mit führender 0
+  if (/QRCode$/i.test(e.format)) return { art: "qr", code: e.text };
+  if (e.format === "Code128" && /^[\x20-\x7E]+$/.test(t)) return { art: "code128", code: t };
+  return { art: "nummer", code: t, hinweis: `${e.format} kann die App nicht als Code zeigen – als Nummer übernommen.` };
+}
+$("fotoKnopf").onclick = () => $("fotoDatei").click();
+$("fotoDatei").onchange = async () => {
+  const datei = $("fotoDatei").files[0]; $("fotoDatei").value = ""; if (!datei) return;
+  fotoMeldung("Lese Code …");
+  try {
+    const [bild] = await Promise.all([bildpunkte(datei, 2400), ladeLeser()]);
+    const treffer = (await ZXingWASM.readBarcodes(bild, { tryHarder: true, maxNumberOfSymbols: 4 })).filter(e => e.isValid && e.text);
+    farbe = farbVorschlag(bild); zeichneFarben();
+    if (!treffer.length) { vorschau(); return fotoMeldung("Kein Code gefunden. Tipp: Code groß, scharf und gerade fotografieren, ohne Spiegelung. Farbe wurde übernommen.", true); }
+    const bester = treffer.find(e => /^(EAN13|UPCA|Code128)$|QRCode$/.test(e.format)) || treffer[0], u = uebernehmen(bester);
+    $("fCode").value = u.code; artGewaehlt = true; setzeArt(u.art); vorschau();
+    fotoMeldung((u.hinweis || "Erkannt: " + { ean13: "EAN-13", code128: "Code 128", qr: "QR-Code", nummer: "Nummer" }[u.art] + ". Farbe vorgeschlagen.") + " Bitte Name eintragen und prüfen.");
+    if (!$("fName").value) $("fName").focus();
+  } catch (e) { fotoMeldung("Lesen nicht möglich: " + e.message, true); }
 };
 
 zeichneListe();

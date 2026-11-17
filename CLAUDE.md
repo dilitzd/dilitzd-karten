@@ -17,7 +17,7 @@ Web-App „Karten“ von Matthias Dilitz: Kunden- und Mitgliedskarten (EAN-13, C
 - **Code immer dunkel (`#111111`) auf Weiß** – in Liste und großer Ansicht, sonst lesen Kassenscanner nicht. Nie umgekehrt (hell auf dunkel).
 - Keine Logos oder Markenzeichen von Geschäften nachbauen – nur Name und frei gewählte Farbe.
 - **Datenschutz:** Karten liegen nur im Gerät (`localStorage`, Schlüssel `karten-v1`). Nie echte Kartennummern in Code, Tests, Commits oder Chat-Ausgaben ablegen; Tests nur mit Testdaten.
-- Keine externen Bibliotheken oder Online-Dienste ohne Rückfrage – Codes erzeugt `codes.js` lokal, die App muss offline laufen.
+- Keine externen Bibliotheken oder Online-Dienste ohne Rückfrage – Codes erzeugt `codes.js` lokal, die App muss offline laufen. Freigegeben (17.11.2026): zxing-wasm in `lib/` zum Lesen von Codes aus Fotos, lokal abgelegt, nie von einem CDN laden.
 - Format der Liste (JSON) abwärtskompatibel halten: `name`, `format` (`ean13`/`code128`/`qr`/`nummer`), `code`, `nummer`, `beschreibung`, `farbe`.
 
 ## Aufbau
@@ -25,6 +25,7 @@ Web-App „Karten“ von Matthias Dilitz: Kunden- und Mitgliedskarten (EAN-13, C
 |---|---|
 | `index.html` | App: Liste, Formular („+“), große Ansicht, Menü (Liste einfügen/kopieren) |
 | `codes.js` | Code-Erzeuger EAN-13, Code 128, QR |
+| `lib/` | zxing-wasm (Lesen aus Fotos), unverändert aus npm – siehe `lib/LIESMICH.txt` |
 | `sw.js` | Offline-Speicher – **bei jeder Änderung `VERSION` erhöhen** |
 | `manifest.webmanifest`, `symbol-*.png` | Name und Symbol für den Home-Bildschirm |
 | `tests/` | `browser.js` (Playwright, iPhone 14), `codes.js` + `codes.py` (zxing liest Codes zurück) |
