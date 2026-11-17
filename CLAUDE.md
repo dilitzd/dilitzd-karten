@@ -3,7 +3,7 @@
 Web-App „Karten“ von Matthias Dilitz: Kunden- und Mitgliedskarten (EAN-13, Code 128, QR-Code, nur Nummer) für den Home-Bildschirm des iPhones, ohne Netz nutzbar. Ausgelagert aus dem Repository `dilitzd/Widgets` (dort bis v1.25.0 unter `web/karten`, entfernt in v1.30.0).
 
 ## Zuerst
-1. `README.md` (Funktionen, Dateien, Veröffentlichung) und `CHANGELOG.md` lesen.
+1. `SESSIONPROTOKOLL.md` lesen (Stand, offene Punkte, Verlauf), dann `README.md` und `CHANGELOG.md`.
 2. Gestaltung: Richtlinie wie bei den Widgets (Skill **widget-design** im Repository `Widgets`), mit den Ausnahmen unten.
 
 ## Wie ich arbeiten will
@@ -40,7 +40,8 @@ Web-App „Karten“ von Matthias Dilitz: Kunden- und Mitgliedskarten (EAN-13, C
 1. Datei(en) ändern, Kopfkommentar in `index.html` aktuell halten, `VERSION` in `sw.js` erhöhen.
 2. `CHANGELOG.md`: neuer Eintrag oben (`## vX.Y.Z – Datum`), Minor = neue Funktion, Patch = Korrektur.
 3. `README.md` bei neuen Funktionen/Dateien anpassen.
-4. Commit und Push **direkt auf `main`** (GitHub Pages veröffentlicht von dort). `main` muss immer lauffähig sein. Nie `--force`; bei abgelehntem Push erst `git pull --rebase origin main`.
+4. `SESSIONPROTOKOLL.md`: Stand, offene Punkte und Verlauf aktualisieren.
+5. Commit und Push **direkt auf `main`** (GitHub Pages veröffentlicht von dort). `main` muss immer lauffähig sein. Nie `--force`; bei abgelehntem Push erst `git pull --rebase origin main`.
 
 ## Veröffentlichung
 Läuft seit 17.11.2026 über GitHub Pages (`main`, `/ (root)`): https://dilitzd.github.io/dilitzd-karten/ – Repository dafür öffentlich (nur Code, keine Karten). Jeder Push auf `main` ist nach 1–2 Minuten live; am iPhone holt die App die neue Fassung beim nächsten Start mit Netz.
